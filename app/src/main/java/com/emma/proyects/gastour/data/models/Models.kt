@@ -15,10 +15,10 @@ data class Vehicle(
 )
 
 data class RouteOption(
-    val name: String,             // "Ruta Más Corta" o "Ruta Más Eficiente"
+    val nameResId: Int, // String Resource ID for localization
     val distanceKm: Double,
     val durationMin: Double,
     val elevationGainMeters: Double,
     val fuelLiters: Double,
-    val pathPoints: List<GeoPoint> // Coordenadas reales sobre las calles
+    val pathPoints: List<GeoPoint>
 )
