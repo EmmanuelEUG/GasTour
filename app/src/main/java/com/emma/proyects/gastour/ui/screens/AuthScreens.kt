@@ -1,146 +1,170 @@
 package com.emma.proyects.gastour.ui.screens
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.emma.proyects.gastour.R
+import androidx.navigation.NavController
 import com.emma.proyects.gastour.ui.viewmodel.AppViewModel
 
 @Composable
 fun LoginScreen(
-    viewModel: AppViewModel,
-    onNavigateToRegister: () -> Unit,
-    onLoginSuccess: () -> Unit
+    navController: NavController,
+    viewModel: AppViewModel
 ) {
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    val state by viewModel.uiState.collectAsState()
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(stringResource(id = R.string.login_title), style = MaterialTheme.typography.headlineLarge)
-            Text(stringResource(id = R.string.app_subtitle), style = MaterialTheme.typography.bodyMedium)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(text = "GasTour", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(32.dp))
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Usuario") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text(stringResource(id = R.string.user_label)) },
-                modifier = Modifier.fillMaxWidth()
-            )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = pass,
-                onValueChange = { pass = it },
-                label = { Text(stringResource(id = R.string.pass_label)) },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+        if (uiState.isLoading) {
+            CircularProgressIndicator()
+        } else {
             Button(
-                onClick = { viewModel.login(user, pass, onLoginSuccess) },
+                onClick = {
+                    viewModel.login(username, password) {
+                        viewModel.checkVehiclesAndNavigate(
+                            onNavigateToAddVehicle = {
+                                navController.navigate("vehicle_selection") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            },
+                            onNavigateToMap = {
+                                navController.navigate("map") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(id = R.string.login_btn))
+                Text("Iniciar Sesión")
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedButton(
-                onClick = onNavigateToRegister,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(id = R.string.register_btn))
+            TextButton(onClick = { navController.navigate("register") }) {
+                Text("¿No tienes cuenta? Regístrate aquí")
             }
+        }
 
-            state.messageResId?.let {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(stringResource(id = it), color = MaterialTheme.colorScheme.error)
-            }
+        uiState.messageResId?.let { resId ->
+            Text(text = stringResource(id = resId), color = MaterialTheme.colorScheme.error)
         }
     }
 }
 
 @Composable
 fun RegisterScreen(
-    viewModel: AppViewModel,
-    onRegisterSuccess: () -> Unit,
-    onBackToLogin: () -> Unit
+    navController: NavController,
+    viewModel: AppViewModel
 ) {
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(stringResource(id = R.string.register_title), style = MaterialTheme.typography.headlineMedium)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(text = "Crear Cuenta", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Usuario") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text(stringResource(id = R.string.user_label)) },
-                modifier = Modifier.fillMaxWidth()
-            )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = pass,
-                onValueChange = { pass = it },
-                label = { Text(stringResource(id = R.string.pass_label)) },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+        if (uiState.isLoading) {
+            CircularProgressIndicator()
+        } else {
             Button(
-                onClick = { viewModel.register(user, pass, onRegisterSuccess) },
+                onClick = {
+                    viewModel.register(username, password) {
+                        viewModel.checkVehiclesAndNavigate(
+                            onNavigateToAddVehicle = {
+                                navController.navigate("vehicle_selection") {
+                                    popUpTo("register") { inclusive = true }
+                                }
+                            },
+                            onNavigateToMap = {
+                                navController.navigate("map") {
+                                    popUpTo("register") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(id = R.string.register_btn))
+                Text("Registrarse")
             }
+        }
 
-            TextButton(onClick = onBackToLogin) {
-                Text(stringResource(id = R.string.already_have_account))
-            }
+        uiState.messageResId?.let { resId ->
+            Text(text = stringResource(id = resId), color = MaterialTheme.colorScheme.error)
         }
     }
 }

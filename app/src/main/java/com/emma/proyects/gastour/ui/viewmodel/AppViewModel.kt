@@ -1,12 +1,20 @@
 package com.emma.proyects.gastour.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.emma.proyects.gastour.R
 import com.emma.proyects.gastour.data.models.RouteOption
 import com.emma.proyects.gastour.data.models.SavedRoute
-import com.emma.proyects.gastour.data.models.User
 import com.emma.proyects.gastour.data.models.Vehicle
+import com.emma.proyects.gastour.data.network.ApiClient
+import com.emma.proyects.gastour.data.network.SavedRouteCreateRequest
+import com.emma.proyects.gastour.data.network.TokenManager
+import com.emma.proyects.gastour.data.network.UserChangePasswordRequest
+import com.emma.proyects.gastour.data.network.UserCreateRequest
+import com.emma.proyects.gastour.data.network.UserUpdateUsernameRequest
+import com.emma.proyects.gastour.data.network.VehicleCatalogDto
+import com.emma.proyects.gastour.data.network.VehicleCreateRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,53 +26,194 @@ import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
 import java.net.HttpURLConnection
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.math.round
 
-class AppViewModel : ViewModel() {
+class AppViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val apiService = ApiClient.getApiService(application)
+    private val tokenManager = TokenManager(application)
 
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
-    fun login(user: String, pass: String, onSuccess: () -> Unit) {
-        if (user.isNotBlank() && pass.isNotBlank()) {
-            _uiState.update {
-                it.copy(
-                    currentUser = User(1, user),
-                    userVehicles = listOf(
-                        Vehicle(1, "Nissan Versa (Sedan)", 15.0, 1100.0),
-                        Vehicle(2, "Chevrolet Pickup (Truck)", 9.0, 1800.0),
-                        Vehicle(3, "VW Golf (Hatchback)", 14.0, 1250.0)
-                    )
-                )
+    init {
+        if (tokenManager.getToken() != null) {
+            loadUserData()
+        }
+    }
+
+    fun loadUserData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val userRes = apiService.getCurrentUser()
+                val vehiclesRes = apiService.getVehicles()
+                val routesRes = apiService.getSavedRoutes()
+
+                if (userRes.isSuccessful) {
+                    val user = userRes.body()
+                    val vehicles = vehiclesRes.body() ?: emptyList()
+                    val routes = routesRes.body() ?: emptyList()
+
+                    _uiState.update {
+                        it.copy(
+                            currentUser = user,
+                            userVehicles = vehicles,
+                            selectedVehicle = vehicles.firstOrNull(),
+                            savedRoutes = routes,
+                            isLoading = false
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, rawErrorMessage = e.message) }
             }
-            onSuccess()
-        } else {
-            _uiState.update { it.copy(messageResId = R.string.auth_error_fields) }
+        }
+    }
+
+    fun loadVehicleCatalog(onSuccess: (List<VehicleCatalogDto>) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.getVehicleCatalog()
+                if (response.isSuccessful && response.body() != null) {
+                    onSuccess(response.body()!!)
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(rawErrorMessage = e.message) }
+            }
+        }
+    }
+
+    fun checkVehiclesAndNavigate(onNavigateToAddVehicle: () -> Unit, onNavigateToMap: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val vehiclesRes = apiService.getVehicles()
+                if (vehiclesRes.isSuccessful) {
+                    val vehicles = vehiclesRes.body() ?: emptyList()
+                    if (vehicles.isEmpty()) {
+                        onNavigateToAddVehicle()
+                    } else {
+                        onNavigateToMap()
+                    }
+                } else {
+                    onNavigateToAddVehicle()
+                }
+            } catch (_: Exception) {
+                onNavigateToAddVehicle()
+            }
+        }
+    }
+
+    fun login(user: String, pass: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, messageResId = null) }
+            try {
+                val response = apiService.login(user, pass)
+                if (response.isSuccessful && response.body() != null) {
+                    tokenManager.saveToken(response.body()!!.accessToken)
+                    loadUserData()
+                    onSuccess()
+                } else {
+                    _uiState.update { it.copy(isLoading = false, messageResId = R.string.auth_error_fields) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, rawErrorMessage = e.message) }
+            }
         }
     }
 
     fun register(user: String, pass: String, onSuccess: () -> Unit) {
-        if (user.isNotBlank() && pass.isNotBlank()) {
-            _uiState.update {
-                it.copy(
-                    currentUser = User(1, user),
-                    userVehicles = listOf(Vehicle(1, "Nissan Versa (Sedan)", 15.0, 1100.0))
-                )
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, messageResId = null) }
+            try {
+                val response = apiService.register(UserCreateRequest(user, pass))
+                if (response.isSuccessful && response.body() != null) {
+                    tokenManager.saveToken(response.body()!!.accessToken)
+                    loadUserData()
+                    onSuccess()
+                } else {
+                    _uiState.update { it.copy(isLoading = false, messageResId = R.string.auth_error_all_fields) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, rawErrorMessage = e.message) }
             }
-            onSuccess()
-        } else {
-            _uiState.update { it.copy(messageResId = R.string.auth_error_all_fields) }
+        }
+    }
+
+    fun logout(onLogoutSuccess: () -> Unit) {
+        tokenManager.clearToken()
+        _uiState.update { AppUiState() }
+        onLogoutSuccess()
+    }
+
+    fun updateUsername(newUsername: String, onSessionExpired: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.updateUsername(UserUpdateUsernameRequest(newUsername))
+                if (response.isSuccessful) {
+                    tokenManager.clearToken()
+                    _uiState.update { AppUiState() }
+                    onSessionExpired()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun changePassword(currentPass: String, newPass: String, onSessionExpired: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.changePassword(UserChangePasswordRequest(currentPass, newPass))
+                if (response.isSuccessful) {
+                    tokenManager.clearToken()
+                    _uiState.update { AppUiState() }
+                    onSessionExpired()
+                }
+            } catch (_: Exception) {}
         }
     }
 
     fun addVehicle(model: String, efficiency: Double, weight: Double) {
-        val currentList = _uiState.value.userVehicles.toMutableList()
-        val newVehicle = Vehicle(currentList.size + 1, model, efficiency, weight)
-        currentList.add(newVehicle)
-        _uiState.update { it.copy(userVehicles = currentList, selectedVehicle = newVehicle) }
+        viewModelScope.launch {
+            try {
+                val response = apiService.addVehicle(VehicleCreateRequest(model, efficiency, weight))
+                if (response.isSuccessful && response.body() != null) {
+                    val newVehicle = response.body()!!
+                    _uiState.update { current ->
+                        val updatedVehicles = current.userVehicles + newVehicle
+                        current.copy(
+                            userVehicles = updatedVehicles,
+                            selectedVehicle = newVehicle
+                        )
+                    }
+                    loadUserData()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun updateVehicle(id: Int, model: String, efficiency: Double, weight: Double) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.updateVehicle(id, VehicleCreateRequest(model, efficiency, weight))
+                if (response.isSuccessful) {
+                    loadUserData()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun deleteVehicle(id: Int) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.deleteVehicle(id)
+                if (response.isSuccessful) {
+                    loadUserData()
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     fun selectVehicle(vehicle: Vehicle) {
@@ -143,6 +292,9 @@ class AppViewModel : ViewModel() {
 
         val resultList = mutableListOf<RouteOption>()
 
+        val safeEfficiency = if (vehicle.efficiencyKmL > 0.0) vehicle.efficiencyKmL else 14.5
+        val safeWeight = if (vehicle.weightKg > 0.0) vehicle.weightKg else 1085.0
+
         for (i in 0 until routesArray.length()) {
             val routeObj = routesArray.getJSONObject(i)
             val distanceMeters = routeObj.getDouble("distance")
@@ -163,10 +315,10 @@ class AppViewModel : ViewModel() {
             }
 
             val elevationMeters = if (i == 0) 240.0 else 110.0
-            val weightFactor = 1.0 + (((vehicle.weightKg - 1200.0) / 100.0) * 0.015)
+            val weightFactor = 1.0 + (((safeWeight - 1200.0) / 100.0) * 0.015)
             val elevationFactor = 1.0 + ((elevationMeters / 100.0) * 0.06)
 
-            val fuelLiters = (distanceKm / vehicle.efficiencyKmL) * weightFactor * elevationFactor
+            val fuelLiters = (distanceKm / safeEfficiency) * weightFactor * elevationFactor
             val nameResId = if (i == 0) R.string.route_shortest else R.string.route_efficient
 
             resultList.add(
@@ -188,35 +340,6 @@ class AppViewModel : ViewModel() {
         _uiState.update { it.copy(selectedRoute = route) }
     }
 
-
-
-    private suspend fun fetchAddressName(lat: Double, lng: Double, defaultFallback: String): String = withContext(Dispatchers.IO) {
-        try {
-            val urlString = "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=16"
-            val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", "GasTourApp/1.0")
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
-
-            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(responseText)
-            val address = json.optJSONObject("address")
-
-            val road = address?.optString("road", "") ?: ""
-            val suburb = address?.optString("suburb", "") ?: address?.optString("neighbourhood", "") ?: ""
-
-            when {
-                road.isNotBlank() && suburb.isNotBlank() -> "$road, $suburb"
-                road.isNotBlank() -> road
-                else -> defaultFallback
-            }
-        } catch (_: Exception) {
-            defaultFallback
-        }
-    }
-
     fun saveSelectedRoute(onSuccess: () -> Unit) {
         val state = _uiState.value
         val route = state.selectedRoute ?: return
@@ -227,37 +350,76 @@ class AppViewModel : ViewModel() {
         val dLng = state.destLng ?: return
 
         viewModelScope.launch {
-            // Obtener nombres reales de las calles por geocoding
-            val originAddress = fetchAddressName(oLat, oLng, "Origen ($oLat, $oLng)")
-            val destAddress = fetchAddressName(dLat, dLng, "Destino ($dLat, $dLng)")
-            val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val originAddress = fetchAddressName(oLat, oLng)
+            val destAddress = fetchAddressName(dLat, dLng)
 
-            val newSavedRoute = SavedRoute(
-                id = state.savedRoutes.size + 1,
-                originName = originAddress,
-                destinationName = destAddress,
-                originLat = oLat,
-                originLng = oLng,
-                destLat = dLat,
-                destLng = dLng,
-                vehicleModel = vehicle.model,
-                distanceKm = route.distanceKm,
-                fuelLiters = route.fuelLiters,
-                date = currentDate
-            )
-
-            _uiState.update {
-                it.copy(
-                    savedRoutes = it.savedRoutes + newSavedRoute,
-                    messageResId = R.string.route_saved_success
+            try {
+                val request = SavedRouteCreateRequest(
+                    originName = originAddress,
+                    destinationName = destAddress,
+                    originLat = oLat,
+                    originLng = oLng,
+                    destLat = dLat,
+                    destLng = dLng,
+                    vehicleModel = vehicle.model,
+                    distanceKm = route.distanceKm,
+                    fuelLiters = route.fuelLiters
                 )
+                val response = apiService.saveRoute(request)
+                if (response.isSuccessful) {
+                    loadUserData()
+                    _uiState.update { it.copy(messageResId = R.string.route_saved_success) }
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(rawErrorMessage = e.message) }
             }
-            onSuccess()
+        }
+    }
+
+    private suspend fun fetchAddressName(lat: Double, lng: Double): String = withContext(Dispatchers.IO) {
+        try {
+            val urlString = "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1"
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("User-Agent", "GasTourApp/1.0 (Contact: emma@gastour.app)")
+            connection.connectTimeout = 6000
+            connection.readTimeout = 6000
+
+            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(responseText)
+
+            val displayName = json.optString("display_name", "")
+            if (displayName.isNotBlank()) {
+                val parts = displayName.split(",")
+                if (parts.isNotEmpty()) {
+                    val streetOrPlace = parts[0].trim()
+                    val suburbOrCity = if (parts.size > 1) parts[1].trim() else ""
+                    return@withContext if (suburbOrCity.isNotBlank() && suburbOrCity != streetOrPlace) {
+                        "$streetOrPlace, $suburbOrCity"
+                    } else {
+                        streetOrPlace
+                    }
+                }
+            }
+
+            val address = json.optJSONObject("address")
+            val road = address?.optString("road", "") ?: address?.optString("pedestrian", "") ?: ""
+            val suburb = address?.optString("suburb", "") ?: address?.optString("neighbourhood", "") ?: address?.optString("city", "") ?: ""
+
+            when {
+                road.isNotBlank() && suburb.isNotBlank() -> "$road, $suburb"
+                road.isNotBlank() -> road
+                suburb.isNotBlank() -> suburb
+                else -> String.format(Locale.ROOT, getApplication<Application>().getString(R.string.location_fallback_format), lat, lng)
+            }
+        } catch (_: Exception) {
+            String.format(Locale.ROOT, getApplication<Application>().getString(R.string.location_fallback_format), lat, lng)
         }
     }
 
     fun loadSavedRouteToMap(savedRoute: SavedRoute, onReady: () -> Unit) {
-        // Asignar dinámicamente las coordenadas exactas almacenadas en la ruta seleccionada
         _uiState.update {
             it.copy(
                 originLat = savedRoute.originLat,
@@ -267,7 +429,6 @@ class AppViewModel : ViewModel() {
             )
         }
 
-        // Trazar automáticamente las rutas y re-centrar el mapa en la pantalla
         calculateRoutes()
         onReady()
     }

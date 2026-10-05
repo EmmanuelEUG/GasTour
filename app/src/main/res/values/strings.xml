@@ -1,4 +1,5 @@
 <resources>
+    <!-- Configuración inicial y Autenticación -->
     <string name="app_name">GasTour</string>
     <string name="app_subtitle">Route &amp; Fuel Calculation with Terrain Elevation</string>
     <string name="login_title">GasTour</string>
@@ -7,40 +8,44 @@
     <string name="register_title">Create Account</string>
     <string name="user_label">Username</string>
     <string name="pass_label">Password</string>
+    <string name="already_have_account">Already have an account? Sign in</string>
+    <string name="auth_error_fields">Please enter username and password</string>
+    <string name="auth_error_all_fields">Please fill in all fields</string>
+
+    <!-- Selección y Configuración de Vehículos -->
     <string name="select_vehicle_title">Select Your Vehicle</string>
     <string name="select_vehicle_placeholder">Select a car...</string>
     <string name="add_vehicle_prompt">Don\'t see your car? Add it:</string>
     <string name="model_label">Vehicle Model</string>
     <string name="efficiency_label">Efficiency (km/L)</string>
     <string name="weight_label">Vehicle Weight (kg)</string>
-
     <string name="save_vehicle_btn">Save Vehicle</string>
     <string name="go_to_map_btn">Go to Map</string>
+
+    <!-- Operaciones del Mapa y Rutas -->
     <string name="calculate_routes_btn">Calculate Routes &amp; Fuel</string>
     <string name="calculating_btn">Calculating with Elevation...</string>
     <string name="save_route_btn">Save Selected Route</string>
     <string name="select_route_label">Select Your Route:</string>
-
     <string name="mark_origin_prompt">Tap the map to set ORIGIN (Point A)</string>
     <string name="mark_dest_prompt">Tap the map to set DESTINATION (Point B)</string>
     <string name="points_marked_prompt">Points A and B marked successfully</string>
+    <string name="my_location_btn">My Location</string>
 
+    <!-- Formatos y Etiquetas en Pantalla -->
     <string name="vehicle_prefix">Vehicle: %1$s</string>
     <string name="weight_prefix">Weight: %1$.1f kg</string>
     <string name="distance_time_format">Distance: %1$.1f km | Time: %2$.1f min</string>
     <string name="elevation_format">Elevation/Terrain: +%1$.1f m</string>
     <string name="fuel_estimate_format">Estimated Fuel: %1$.2f Liters</string>
     <string name="vehicle_dropdown_format">%1$s (%2$.1f km/L, %3$.1f kg)</string>
-
     <string name="route_shortest">Shortest Route</string>
     <string name="route_efficient">Most Efficient Route</string>
     <string name="marker_origin">Origin (Point A)</string>
     <string name="marker_dest">Destination (Point B)</string>
     <string name="route_saved_success">Route saved successfully to database!</string>
-    <string name="auth_error_fields">Please enter username and password</string>
-    <string name="auth_error_all_fields">Please fill in all fields</string>
-    <string name="already_have_account">Already have an account? Sign in</string>
 
+    <!-- Sección Mi Cuenta y Rutas Guardadas -->
     <string name="my_account_title">My Account</string>
     <string name="back_btn">Back</string>
     <string name="user_info_section">User Information</string>
@@ -48,5 +53,38 @@
     <string name="no_vehicles_msg">No vehicles registered yet.</string>
     <string name="saved_routes_section">Saved Routes</string>
     <string name="no_saved_routes_msg">No saved routes yet.</string>
-    <string name="my_location_btn">My Location</string>
+
+    <!-- Nuevos Recursos para Diálogos y Acciones de Cuenta -->
+    <string name="account_title">My Account</string>
+    <string name="account_user_label">User: %1$s</string>
+    <string name="account_loading">Loading…</string>
+    <string name="account_vehicles_title">My Vehicles</string>
+    <string name="account_routes_title">Saved Routes</string>
+    <string name="account_edit_name">Edit Username</string>
+    <string name="account_change_pass">Change Password</string>
+    <string name="account_add_vehicle">Add Vehicle</string>
+    <string name="account_edit_vehicle">Edit Vehicle</string>
+    <string name="account_delete">Delete</string>
+    <string name="account_view_on_map">View on Map</string>
+    <string name="account_logout">Sign Out</string>
+    <string name="account_back">Back</string>
+
+    <string name="dialog_update_user_title">Update Username</string>
+    <string name="dialog_new_user_label">New Username</string>
+    <string name="dialog_change_pass_title">Change Password</string>
+    <string name="dialog_current_pass_label">Current Password</string>
+    <string name="dialog_new_pass_label">New Password</string>
+    <string name="dialog_add_vehicle_title">Add New Vehicle</string>
+    <string name="dialog_edit_vehicle_title">Edit Vehicle</string>
+    <string name="dialog_select_catalog">Select from catalog</string>
+    <string name="dialog_vehicle_model_label">Vehicle Model</string>
+    <string name="dialog_efficiency_label">Efficiency (km/L)</string>
+    <string name="dialog_weight_label">Weight (kg)</string>
+    <string name="dialog_btn_save">Save</string>
+    <string name="dialog_btn_update">Update</string>
+    <string name="dialog_btn_change">Change</string>
+    <string name="dialog_btn_cancel">Cancel</string>
+    <string name="location_fallback_format">location (%1$.4f, %2$.4f)</string>
+    <string name="vehicle_specs_format">Efficiency: %1$.1f km/L | Weight: %2$.1f kg</string>
+    <string name="route_specs_format">Distance: %1$.1f km | Fuel: %2$.2f L</string>
 </resources>
