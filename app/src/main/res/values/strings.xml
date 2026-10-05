@@ -40,4 +40,13 @@
     <string name="auth_error_fields">Please enter username and password</string>
     <string name="auth_error_all_fields">Please fill in all fields</string>
     <string name="already_have_account">Already have an account? Sign in</string>
+
+    <string name="my_account_title">My Account</string>
+    <string name="back_btn">Back</string>
+    <string name="user_info_section">User Information</string>
+    <string name="my_vehicles_section">My Vehicles</string>
+    <string name="no_vehicles_msg">No vehicles registered yet.</string>
+    <string name="saved_routes_section">Saved Routes</string>
+    <string name="no_saved_routes_msg">No saved routes yet.</string>
+    <string name="my_location_btn">My Location</string>
 </resources>

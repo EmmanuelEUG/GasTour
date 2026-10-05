@@ -1,136 +1,171 @@
 package com.emma.proyects.gastour.ui.components
 
-import android.graphics.Color as AndroidColor
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import android.annotation.SuppressLint
+import android.graphics.Color
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.graphics.toColorInt
 import com.emma.proyects.gastour.R
 import com.emma.proyects.gastour.data.models.RouteOption
-import com.emma.proyects.gastour.ui.theme.RouteEcoColor
-import com.emma.proyects.gastour.ui.theme.RouteShortColor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 
+@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun MapWebView(
     modifier: Modifier = Modifier,
     routes: List<RouteOption> = emptyList(),
     selectedRoute: RouteOption? = null,
-    onPointSelected: (lat: Double, lng: Double, isOrigin: Boolean) -> Unit
+    originPoint: GeoPoint? = null,
+    destPoint: GeoPoint? = null,
+    initialCenter: GeoPoint? = null,
+    onPointSelected: ((Double, Double, Boolean) -> Unit)? = null,
+    url: String? = null
 ) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    if (url != null) {
+        AndroidView(
+            modifier = modifier.fillMaxSize(),
+            factory = { context ->
+                WebView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    webViewClient = WebViewClient()
+                    loadUrl(url)
+                }
+            },
+            update = { webView ->
+                if (webView.url != url) {
+                    webView.loadUrl(url)
+                }
+            }
+        )
+    } else {
+        val context = LocalContext.current
+        val originTitle = stringResource(id = R.string.marker_origin)
+        val destTitle = stringResource(id = R.string.marker_dest)
 
-    val originTitle = context.getString(R.string.marker_origin)
-    val destTitle = context.getString(R.string.marker_dest)
+        Configuration.getInstance().userAgentValue = context.packageName
 
-    var isNextOrigin by rememberSaveable { mutableStateOf(true) }
-
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            controller.setZoom(13.5)
-            controller.setCenter(GeoPoint(16.7516, -93.1159))
-        }
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> {}
+        val mapView = remember {
+            MapView(context).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                controller.setZoom(14.0)
             }
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDetach()
+
+        // Mover la cámara a la ubicación actual cuando se reciba la posición GPS
+        LaunchedEffect(initialCenter) {
+            initialCenter?.let { point ->
+                mapView.controller.animateTo(point)
+            }
         }
-    }
 
-    AndroidView(
-        modifier = modifier,
-        factory = {
-            val receiver = object : MapEventsReceiver {
-                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                    val lat = p.latitude
-                    val lng = p.longitude
+        DisposableEffect(mapView) {
+            onDispose {
+                mapView.onDetach()
+            }
+        }
 
-                    if (isNextOrigin) {
-                        mapView.overlays.removeAll { it is Marker || it is Polyline }
+        LaunchedEffect(routes, selectedRoute, originPoint, destPoint) {
+            withContext(Dispatchers.Default) {
+                val newOverlays = mutableListOf<org.osmdroid.views.overlay.Overlay>()
 
-                        val markerA = Marker(mapView).apply {
-                            position = p
-                            title = originTitle
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                if (onPointSelected != null) {
+                    val eventsReceiver = object : MapEventsReceiver {
+                        override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                            if (p != null) {
+                                val isOrigin = originPoint == null || destPoint != null
+                                onPointSelected(p.latitude, p.longitude, isOrigin)
+                            }
+                            return true
                         }
-                        mapView.overlays.add(markerA)
-                        onPointSelected(lat, lng, true)
-                        isNextOrigin = false
-                    } else {
-                        val markerB = Marker(mapView).apply {
-                            position = p
-                            title = destTitle
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        }
-                        mapView.overlays.add(markerB)
-                        onPointSelected(lat, lng, false)
-                        isNextOrigin = true
+
+                        override fun longPressHelper(p: GeoPoint?): Boolean = false
                     }
+                    newOverlays.add(MapEventsOverlay(eventsReceiver))
+                }
 
+                originPoint?.let { point ->
+                    val startMarker = Marker(mapView).apply {
+                        position = point
+                        title = originTitle
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    }
+                    newOverlays.add(startMarker)
+                }
+
+                destPoint?.let { point ->
+                    val endMarker = Marker(mapView).apply {
+                        position = point
+                        title = destTitle
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    }
+                    newOverlays.add(endMarker)
+                }
+
+                routes.filter { it != selectedRoute }.forEach { route ->
+                    if (route.pathPoints.isNotEmpty()) {
+                        val polyline = Polyline().apply {
+                            setPoints(route.pathPoints)
+                            outlinePaint.color = Color.GRAY
+                            outlinePaint.strokeWidth = 8f
+                        }
+                        newOverlays.add(polyline)
+                    }
+                }
+
+                selectedRoute?.let { route ->
+                    if (route.pathPoints.isNotEmpty()) {
+                        val polyline = Polyline().apply {
+                            setPoints(route.pathPoints)
+                            outlinePaint.color = "#2196F3".toColorInt()
+                            outlinePaint.strokeWidth = 14f
+                        }
+                        newOverlays.add(polyline)
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    mapView.overlays.clear()
+                    mapView.overlays.addAll(newOverlays)
                     mapView.invalidate()
-                    return true
-                }
 
-                override fun longPressHelper(p: GeoPoint): Boolean = false
-            }
-
-            mapView.overlays.add(MapEventsOverlay(receiver))
-            mapView
-        },
-        update = { map ->
-            if (routes.isNotEmpty()) {
-                map.overlays.removeAll { it is Polyline }
-
-                routes.forEachIndexed { index, route ->
-                    val isSelected = route == selectedRoute
-
-                    val baseColor = if (index == 0) RouteShortColor.toArgb() else RouteEcoColor.toArgb()
-                    val finalColor = if (isSelected) baseColor else AndroidColor.argb(120, AndroidColor.red(baseColor), AndroidColor.green(baseColor), AndroidColor.blue(baseColor))
-
-                    val line = Polyline().apply {
-                        setPoints(route.pathPoints)
-                        outlinePaint.color = finalColor
-                        outlinePaint.strokeWidth = if (isSelected) 14f else 8f
+                    selectedRoute?.let { route ->
+                        if (route.pathPoints.isNotEmpty() && mapView.isLayoutOccurred) {
+                            try {
+                                val box = BoundingBox.fromGeoPoints(route.pathPoints)
+                                mapView.zoomToBoundingBox(box, true, 100)
+                            } catch (_: Exception) { }
+                        }
                     }
-                    map.overlays.add(line)
                 }
-
-                if (selectedRoute != null && selectedRoute.pathPoints.isNotEmpty()) {
-                    val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(selectedRoute.pathPoints)
-                    map.post { map.zoomToBoundingBox(bounds, true, 80) }
-                }
-
-                map.invalidate()
             }
         }
-    )
+
+        AndroidView(
+            factory = { mapView },
+            modifier = modifier.fillMaxSize()
+        )
+    }
 }

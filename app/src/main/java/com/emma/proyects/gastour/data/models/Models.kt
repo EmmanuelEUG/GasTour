@@ -22,3 +22,17 @@ data class RouteOption(
     val fuelLiters: Double,
     val pathPoints: List<GeoPoint>
 )
+
+data class SavedRoute(
+    val id: Int,
+    val originName: String,
+    val destinationName: String,
+    val originLat: Double,
+    val originLng: Double,
+    val destLat: Double,
+    val destLng: Double,
+    val vehicleModel: String,
+    val distanceKm: Double,
+    val fuelLiters: Double,
+    val date: String
+)

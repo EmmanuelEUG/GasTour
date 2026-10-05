@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emma.proyects.gastour.R
 import com.emma.proyects.gastour.data.models.RouteOption
+import com.emma.proyects.gastour.data.models.SavedRoute
 import com.emma.proyects.gastour.data.models.User
 import com.emma.proyects.gastour.data.models.Vehicle
 import kotlinx.coroutines.Dispatchers
@@ -17,22 +18,10 @@ import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.round
-
-data class AppUiState(
-    val currentUser: User? = null,
-    val userVehicles: List<Vehicle> = emptyList(),
-    val selectedVehicle: Vehicle? = null,
-    val originLat: Double? = null,
-    val originLng: Double? = null,
-    val destLat: Double? = null,
-    val destLng: Double? = null,
-    val calculatedRoutes: List<RouteOption> = emptyList(),
-    val selectedRoute: RouteOption? = null,
-    val isLoading: Boolean = false,
-    val messageResId: Int? = null,
-    val rawErrorMessage: String? = null
-)
 
 class AppViewModel : ViewModel() {
 
@@ -88,6 +77,19 @@ class AppViewModel : ViewModel() {
 
     fun setDestination(lat: Double, lng: Double) {
         _uiState.update { it.copy(destLat = lat, destLng = lng, calculatedRoutes = emptyList()) }
+    }
+
+    fun clearPoints() {
+        _uiState.update {
+            it.copy(
+                originLat = null,
+                originLng = null,
+                destLat = null,
+                destLng = null,
+                calculatedRoutes = emptyList(),
+                selectedRoute = null
+            )
+        }
     }
 
     fun calculateRoutes() {
@@ -186,8 +188,87 @@ class AppViewModel : ViewModel() {
         _uiState.update { it.copy(selectedRoute = route) }
     }
 
+
+
+    private suspend fun fetchAddressName(lat: Double, lng: Double, defaultFallback: String): String = withContext(Dispatchers.IO) {
+        try {
+            val urlString = "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=16"
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("User-Agent", "GasTourApp/1.0")
+            connection.connectTimeout = 4000
+            connection.readTimeout = 4000
+
+            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(responseText)
+            val address = json.optJSONObject("address")
+
+            val road = address?.optString("road", "") ?: ""
+            val suburb = address?.optString("suburb", "") ?: address?.optString("neighbourhood", "") ?: ""
+
+            when {
+                road.isNotBlank() && suburb.isNotBlank() -> "$road, $suburb"
+                road.isNotBlank() -> road
+                else -> defaultFallback
+            }
+        } catch (_: Exception) {
+            defaultFallback
+        }
+    }
+
     fun saveSelectedRoute(onSuccess: () -> Unit) {
-        _uiState.update { it.copy(messageResId = R.string.route_saved_success) }
-        onSuccess()
+        val state = _uiState.value
+        val route = state.selectedRoute ?: return
+        val vehicle = state.selectedVehicle ?: return
+        val oLat = state.originLat ?: return
+        val oLng = state.originLng ?: return
+        val dLat = state.destLat ?: return
+        val dLng = state.destLng ?: return
+
+        viewModelScope.launch {
+            // Obtener nombres reales de las calles por geocoding
+            val originAddress = fetchAddressName(oLat, oLng, "Origen ($oLat, $oLng)")
+            val destAddress = fetchAddressName(dLat, dLng, "Destino ($dLat, $dLng)")
+            val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+            val newSavedRoute = SavedRoute(
+                id = state.savedRoutes.size + 1,
+                originName = originAddress,
+                destinationName = destAddress,
+                originLat = oLat,
+                originLng = oLng,
+                destLat = dLat,
+                destLng = dLng,
+                vehicleModel = vehicle.model,
+                distanceKm = route.distanceKm,
+                fuelLiters = route.fuelLiters,
+                date = currentDate
+            )
+
+            _uiState.update {
+                it.copy(
+                    savedRoutes = it.savedRoutes + newSavedRoute,
+                    messageResId = R.string.route_saved_success
+                )
+            }
+            onSuccess()
+        }
+    }
+
+    fun loadSavedRouteToMap(savedRoute: SavedRoute, onReady: () -> Unit) {
+        // Asignar dinámicamente las coordenadas exactas almacenadas en la ruta seleccionada
+        _uiState.update {
+            it.copy(
+                originLat = savedRoute.originLat,
+                originLng = savedRoute.originLng,
+                destLat = savedRoute.destLat,
+                destLng = savedRoute.destLng
+            )
+        }
+
+        // Trazar automáticamente las rutas y re-centrar el mapa en la pantalla
+        calculateRoutes()
+        onReady()
     }
 }
